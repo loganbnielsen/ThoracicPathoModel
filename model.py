@@ -1,4 +1,5 @@
 import log
+import logging
 logger = logging.getLogger('root') 
 
 import torch
@@ -47,7 +48,7 @@ class FlattenLinearProjection(nn.Module):
         return self.linears(batch.flatten(start_dim=-2)) # Batch x Tiles x Height x Width
 
 
-class ThoracicAbnormalityModel(nn.Module):
+class ThoracicPathoModel(nn.Module):
     def __init__(self, ds, linear_projection_configs, encoder_configs, num_residual_blocks, rpn_configs):
         super().__init__()
         linear_projection_configs = self._preprocess_linear_projection_configs(ds, linear_projection_configs)
