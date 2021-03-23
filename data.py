@@ -26,7 +26,6 @@ class MedicalImage:
             while g <= gmax:
                 yield g
                 g += gstep
-        
         x_dim, y_dim = img.shape[:2]
         x_spacing, y_spacing = x_dim/num_x_dim, y_dim/num_y_dim
         if not ignore_split_incompatability and (x_spacing != int(x_spacing) or y_spacing != int(y_spacing)):
@@ -62,7 +61,7 @@ class MedicalImage:
 
 
 class ThoracicDataset(Dataset):
-    def __init__(self, summary_csv, root_dir, transform=None, pre_split=False):
+    def __init__(self, summary_csv, root_dir, transform=None, pre_split=True):
         self.summary_df = pd.read_csv(path.join(root_dir, summary_csv))
         self.root_dir = root_dir
         self.transform = transform
@@ -70,6 +69,8 @@ class ThoracicDataset(Dataset):
         self.pre_split = pre_split
         self.split_list_X = None
         self.split_list_Y = None
+        self.num_patches = None
+        self.shape = None
 
     def _register_X_split(self, list_X):
         self.split_list_X = list_X
@@ -82,12 +83,23 @@ class ThoracicDataset(Dataset):
         self._register_Y_split(list_Y)
 
     @property
-    def number_of_splits(self):
-        if self.split_list_X and self.split_list_Y:
-            return (len(self.split_list_X)-1)*(len(self.split_list_Y)-1)
-        else:
-            raise ValueError("Must register splits before number of splits can be determined.")
+    def number_of_patches(self):
+        if not self.num_patches:
+            if self.split_list_X and self.split_list_Y:
+                self.num_patches = (len(self.split_list_X)-1)*(len(self.split_list_Y)-1)
+            else:
+                self.num_patches = 1
+                # raise ValueError("Must register splits before number of splits can be determined.")
+        return self.num_patches
 
+    @property
+    def shape(self):
+        """
+            will be tile shape if pre_split is True
+        """
+        if not self.ret_shape:
+            self.shape = (*self[0][-2:])
+        return self.shape
     
     def __len__(self):
         return len(self.summary_df)

@@ -49,15 +49,23 @@ class FlattenLinearProjection(nn.Module):
 
 
 class ThoracicPathoModel(nn.Module):
-    def __init__(self, ds, linear_projection_configs, encoder_configs, num_residual_blocks, rpn_configs):
+    def __init__(self, ds, linear_projection_configs, encoder_configs, res_block_configs, rpn_configs):
         super().__init__()
+        # projection
         linear_projection_configs = self._preprocess_linear_projection_configs(ds, linear_projection_configs)
         self.flp = FlattenLinearProjection(**linear_projection_configs)
-        # TODO 1) position embeddings appended onto projection
-        #      2) Transformer Encoder
-        #      3) Residual Blocks
+        # embedding
+        encoder_configs = self._preprocess_embedding_configs(ds)
+        self.embeddings = nn.Embedding(**encoder_configs)
+        # transformer encoder
+        encoder_configs = self._preprocess_encoder_configs(ds, encoder_configs)
+        self.encoder = TransformerEncoderWrapper(**encoder_configs)
+        # residual blocks
+        self.res_blocks = ResidualBlocks(**res_block_configs)
+        # TODO I'm here.
         #      4) RPN
         #      5) output
+        self.num_tiles = ds.num_splits
 
     def _preprocess_linear_projection_configs(self, ds, lp_configs):
         tile_x_dim, tile_y_dim = ds[0].shape[-2:]
@@ -67,6 +75,77 @@ class ThoracicPathoModel(nn.Module):
         if not lp_configs.get('output_dim'):
             lp_configs['output_dim'] = flat_dim 
         return lp_configs
+
+    def _preprocess_embedding_configs(self, ds):
+        embedding_configs = dict()
+        if not embedding_configs.get('num_embeddings'):
+            embedding_configs['num_embeddings'] = ds.number_of_splits
+        if not embedding_configs.get('embedding_dim'):
+            height, width = ds.shape
+            embedding_configs['embedding_dim'] = height*width
+        return embedding_configs
+
+    def _preprocess_encoder_configs(self, ds, encoder_configs):
+        if not encoder_configs.get('dmodel'):
+            num_splits, (x_dim, y_dim)  = ds.num_splits, ds.shape
+            encoder_configs['dmodel'] = num_splits * x_dim * y_dim
+        return encoder_configs
+
     
     def forward(self, X):
-        self.flp(X)
+        X = self.flp(X)
+        for i in range(self.num_tiles):
+            X[:,i,:] += self.embeddings(i) # Batch x Tiles x Flattened
+        X = self.encoder(X)
+
+
+class TransformerEncoderWrapper(nn.Module):
+    """
+        Wraps what pytorch refers to as a `TransformerEncoderLayer` with the `TransformerEncoder`
+        to treat them as one module
+    """
+    def __init__(self, num_layers, dmodel, nhead, dim_ff=2048, dropout=0.1, activation="relu"):
+        super().__init__()
+        layer = nn.TransformerEncoderLayer(d_model=dmodel, nhead=nhead,
+                                           dim_feedforward=dim_ff,
+                                           dropout=dropout, activation=activation)
+        self.encoder = nn.TransformerEncoder(encoder_layer=layer, num_layers=num_layers)
+    
+    def forward(self, X):
+        return self.encoder(X)
+
+
+class ResidualBlocks(nn.Module):
+    def __init__(self, block_channels):
+        """
+            [(3,6,3),(3,5,3)] TODO make it so input and output channels for a block don't need to match.
+        """
+        super().__init__()
+        self.blocks = nn.Sequential([ResBlock(*c) for c in block_channels])
+    
+    def forward(self, X):
+        return self.blocks(X)
+
+
+class ResBlock(nn.Module):
+    def __init__(self, c1, c2, c3):
+        super().__init__(channels)
+        self.activ = nn.ReLU()
+
+        self.conv1 = nn.Conv2d(in_channels=c1, out_channels=c2, kernel_size=3, stride=1, padding=1)
+        self.bn1 = nn.BatchNorm2d(c2)
+        self.conv2 = nn.Conv2d(in_channels=c2, out_channels=c3, kernel_size=3, stride=1, padding=1)
+        self.bn2 = nn.BatchNorm2d(1)
+
+    def forward(self, X):
+        orig_X = X
+
+        X = self.conv1(X)
+        X = self.activ(self.bn1(X))
+
+        X = self.conv2(X)
+        X = self.activ(self.bn2(X))
+
+        return orig_X + X
+
+        
