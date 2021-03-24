@@ -65,6 +65,8 @@ class ThoracicPathoModel(nn.Module):
         # TODO I'm here.
         #      4) RPN
         #      5) output
+
+
         self.num_tiles = ds.num_splits
         self.num_x_splits = ds.num_x_splits
         self.num_y_splits = ds.num_y_splits
@@ -97,7 +99,7 @@ class ThoracicPathoModel(nn.Module):
     def _combine_tiles(self, X, tile_dim=-3):
         """
             Assemble the feature tiles into cohesive feature image
-            
+
             Batch x Tiles x Height x Width -> Batch x Height x Width
         """
         X = X.reshape(-1, self.num_x_splits, self.num_y_splits, self.tile_x_dim, self.tile_y_dim)
