@@ -1,0 +1,20 @@
+file_loc,class_name,class_id,rad_id,x_min,y_min,x_max,y_max
+pokemon/1.png,foo1,0,0,0,0,0,0
+pokemon/2.png,foo2,1,1,0,0,0,0
+pokemon/3-mega.png,foo3,3,4,0,0,0,0
+pokemon/3.png,foo4,2,3,0,0,0,0
+pokemon/4.png,foo5,2,3,0,0,0,0
+pokemon/5.png,foo6,3,2,0,0,0,0
+pokemon/6-mega-x.png ,foo7,1,1,0,0,0,0
+pokemon/6-mega-y.png,foo8,0,2,0,0,0,0
+pokemon/6.png,foo9,4,0,0,0,0,0
+pokemon/7.png,foo10,3,2,0,0,0,0
+pokemon/8.png,bar1,2,1,0,0,0,0
+pokemon/9-mega.png,bar2,1,0,0,0,0,0
+pokemon/9.png,bar3,4,0,0,0,0,0
+pokemon/10.png ,bar4,2,3,0,0,0,0
+pokemon/11.png ,bar5,3,4,0,0,0,0
+pokemon/12.png ,bar6,1,4,0,0,0,0
+pokemon/13.png ,bar7,0,1,0,0,0,0
+pokemon/14.png ,bar8,0,0,0,0,0,0
+pokemon/15-mega.png  ,bar9,2,2,0,0,0,0

@@ -7,21 +7,21 @@ import torch.nn as nn
 
 
 class FlattenLinearProjection(nn.Module):
-    def __init__(self, input_dim, out_dim, hl_scalings=[]):
+    def __init__(self, input_dim, output_dim, hl_dim_scalings=[]):
         super().__init__()
-        if hl_scalings:
-            hl_dims = self._process_hl_scalings(input_dim, hl_scalings)
+        if hl_dim_scalings:
+            hl_dims = self._process_hl_scalings(input_dim, hl_dim_scalings)
         self.linears = nn.Sequential(
-            self._process_hl_dims(input_dim, hl_dims, out_dim)
+            *self._process_hl_dims(input_dim, hl_dim_scalings, output_dim)
         )
 
-    def _process_hl_scalings(self, input_dim, hl_scalings):
+    def _process_hl_scalings(self, in_dim, hl_dim_scalings):
         """
             note that this function truncates when numbers results in float. (e.g. 5*1.5 = 7)
         """
         layers_dims = []
-        prev = curr = input_dim
-        for curr in hl_scalings:
+        prev = curr = in_dim
+        for curr in hl_dim_scalings:
             if curr == None:
                 msg = f"'None' value encountered for hidden_layers. Assuming same dim as previous layer is desired={prev}."
                 logger.warning(msg)
@@ -31,9 +31,9 @@ class FlattenLinearProjection(nn.Module):
             prev = curr
         return layers_dims
 
-    def _process_hl_dims(self, input_dim, hl_dim, out_dim):
+    def _process_hl_dims(self, in_dim, hl_dim, out_dim):
         linear_layers = []
-        prev = curr = input_dim # = curr is needed if len(hl_dim) == 0
+        prev = curr = in_dim # = curr is needed if len(hl_dim) == 0
         for curr in hl_dim:
             linear_layers.append(
                 nn.Linear(prev, curr)
@@ -62,12 +62,10 @@ class ThoracicPathoModel(nn.Module):
         self.encoder = TransformerEncoderWrapper(**encoder_configs)
         # residual blocks
         self.res_blocks = ResidualBlocks(**res_block_configs)
-        # TODO I'm here.
-        #      4) RPN
-        #      5) output
-
-
-        self.num_tiles = ds.num_splits
+        ## TODO I'm here.
+        ##      4) RPN
+        ##      5) output
+        self.num_tiles = ds.num_tiles
         self.num_x_splits = ds.num_x_splits
         self.num_y_splits = ds.num_y_splits
 
@@ -84,15 +82,16 @@ class ThoracicPathoModel(nn.Module):
     def _preprocess_embedding_configs(self, ds):
         embedding_configs = dict()
         if not embedding_configs.get('num_embeddings'):
-            embedding_configs['num_embeddings'] = ds.number_of_splits
+            embedding_configs['num_embeddings'] = ds.num_tiles
         if not embedding_configs.get('embedding_dim'):
             height, width = ds.shape
+            print(height, width)
             embedding_configs['embedding_dim'] = height*width
         return embedding_configs
 
     def _preprocess_encoder_configs(self, ds, encoder_configs):
         if not encoder_configs.get('dmodel'):
-            num_splits, (x_dim, y_dim)  = ds.num_splits, ds.shape
+            num_splits, (x_dim, y_dim)  = ds.num_tiles, ds.shape
             encoder_configs['dmodel'] = num_splits * x_dim * y_dim
         return encoder_configs
 

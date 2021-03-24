@@ -1,12 +1,12 @@
 DATA = {
-    "summary_csv": "table_data.csv",
+    "summary_csv": "summary.csv",
     "root_dir": "data/",
     "pre_split": True
 }
 
 MODEL = {
     "linear_projection_configs": {
-        "num_layers":1
+        "hl_dim_scalings":[]
     },
     "encoder_configs": {
         "num_layers": 3,

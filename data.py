@@ -1,13 +1,21 @@
+import log
+import logging
+logger = logging.getLogger('root') 
+
+import torch
 from torch import Tensor
 
 from torch.utils.data import Dataset
 
+import pandas as pd
+import numpy as np
+
 from os import path
-import io
+from PIL import Image
 
 class MedicalImage:
     def __init__(self, img, class_name, class_id, rad_id, x_min, y_min, x_max, y_max):
-        self.img = img
+        self.data = img
         self.class_name = class_name
         self.class_id = class_id
         self.rad_id = rad_id
@@ -26,14 +34,15 @@ class MedicalImage:
             while g <= gmax:
                 yield g
                 g += gstep
-        x_dim, y_dim = img.shape[:2]
-        x_spacing, y_spacing = x_dim/num_x_dim, y_dim/num_y_dim
-        if not ignore_split_incompatability and (x_spacing != int(x_spacing) or y_spacing != int(y_spacing)):
-            if x_spacing != int(x_spacing):
+        x_dim, y_dim = self.data.shape[:2]
+        x_spacing, y_spacing = x_dim/num_x_splits, y_dim/num_y_splits
+        x_spacing_int, y_spacing_int = int(x_spacing), int(y_spacing)
+        if not ignore_split_incompatability and (x_spacing != x_spacing_int or y_spacing != y_spacing_int):
+            if x_spacing != x_spacing_int:
                 raise ValueError(f"x_dim={x_dim} and num_x_splits={num_x_splits} does not divide evenly ({x_spacing:.3f}).")
             else:
                 raise ValueError(f"y_dim={y_dim} and num_y_splits={y_spacing} does not divide evenly ({y_spacing:.3f}).")
-        list_X, list_Y = split_idx_generator(x_spacing), split_idx_generator(y_spacing)
+        list_X, list_Y = list(split_idx_generator(x_spacing_int, x_dim)), list(split_idx_generator(y_spacing_int, y_dim))
         return list_X, list_Y
 
     def exact_split(self, list_X, list_Y):
@@ -45,18 +54,20 @@ class MedicalImage:
         """
         it_X = len(list_X) - 1
         it_Y = len(list_Y) - 1
-        # images = [None]*(it_X*it_Y)
+        images = [None]*(it_X*it_Y)
         # c = 0
         # for i in range(it_X):
         #     for j in range(it_Y):
-        #         images[c] = self.img[list_X[i]:list_X[i+1]+1,
-        #                              list_Y[j]:list_Y[j+1]+1]
-        #         c +=1 
+        #         images[c] = self.data[list_X[i]:list_X[i+1],
+        #                               list_Y[j]:list_Y[j+1]]
+        #         c +=1
+        # print([(i, im.shape) for i, im in enumerate(images)])
         # images = Tensor(images)
+        # return images
         return Tensor(
-                  [self.img[list_X[i]:list_X[i+1]+1,
-                            list_Y[j]:list_Y[j+1]+1]
-                    for i in range(it_X) for y in range(it_Y)]
+                  [self.data[list_X[i]:list_X[i+1],
+                             list_Y[j]:list_Y[j+1]]
+                    for i in range(it_X) for j in range(it_Y)]
         )
 
 
@@ -69,10 +80,11 @@ class ThoracicDataset(Dataset):
         self.pre_split = pre_split
         self.split_list_X = None
         self.split_list_Y = None
-        self.num_patches = None
+        self._num_tiles = None
         self.num_x_splits = None
         self.num_y_splits = None
-        self.shape = None
+        self._shape = None
+        self.split_ready = False
 
     def _register_X_split(self, list_X):
         self.split_list_X = list_X
@@ -86,50 +98,61 @@ class ThoracicDataset(Dataset):
 
         self.num_x_splits = len(list_X)-1
         self.num_y_splits = len(list_Y)-1
+        self.split_ready  = True
 
     @property
-    def number_of_patches(self):
-        if not self.num_patches:
+    def num_tiles(self):
+        if not self._num_tiles:
             if self.split_list_X and self.split_list_Y:
-                self.num_patches = (len(self.split_list_X)-1)*(len(self.split_list_Y)-1)
+                self._num_tiles = (len(self.split_list_X)-1)*(len(self.split_list_Y)-1)
             else:
-                self.num_patches = 1
+                self._num_tiles = 1
                 # raise ValueError("Must register splits before number of splits can be determined.")
-        return self.num_patches
+        return self._num_tiles
 
     @property
     def shape(self):
         """
             will be tile shape if pre_split is True
         """
-        if not self.ret_shape:
-            self.shape = (*self[0][-2:])
-        return self.shape
+        if not self._shape:
+            self._shape = self[0].shape[-3:-1] # TODO work channels into the dimensions... This will change the tiling function too
+        return self._shape
+
+    def read_img(self, path):
+        img = Image.open("data/pokemon/1.png")
+        img.load()
+        return np.asarray(img, dtype="int32")
     
     def __len__(self):
         return len(self.summary_df)
 
-    def __getitem__(self, idx):
-        if torch.is_tesnor(idx):
+    def get_med_image(self, idx):
+        if torch.is_tensor(idx):
             idx = idx.tolist()
-        img_name = path.join(self.root_dir, self.summary_df.iloc[idx,0])
-        img = io.imread(img_name)
+        img_path = path.join(self.root_dir, self.summary_df.iloc[idx,0])
+        img = self.read_img(img_path)
 
         if self.transform: 
             img = self.transform(img)
 
-        class_name = self.summary_df[idx,1]
-        class_id   = self.summary_df[idx,2]
-        rad_id     = self.summary_df[idx,3]
-        x_min = self.summary_df[idx,4]
-        y_min = self.summary_df[idx,5]
-        x_max = self.summary_df[idx,6]
-        y_max = self.summary_df[idx,7]
+        class_name = self.summary_df.iloc[idx,1]
+        class_id   = self.summary_df.iloc[idx,2]
+        rad_id     = self.summary_df.iloc[idx,3]
+        x_min = self.summary_df.iloc[idx,4]
+        y_min = self.summary_df.iloc[idx,5]
+        x_max = self.summary_df.iloc[idx,6]
+        y_max = self.summary_df.iloc[idx,7]
 
-        med_img = MedicalImage(img, class_name, class_id, rad_id, x_min, y_min, x_max, y_max)
-        res = [med_img] if not pre_split else med_img.exact_split(self.split_list_X, self.split_list_Y)
+        return MedicalImage(img, class_name, class_id, rad_id, x_min, y_min, x_max, y_max)
 
-        return Tensor(res)
+
+    def __getitem__(self, idx):
+        med_img = self.get_med_image(idx)
+
+        res = Tensor([med_img.data]) if not self.pre_split or not self.split_ready else med_img.exact_split(self.split_list_X, self.split_list_Y)
+
+        return res
 
 
 
