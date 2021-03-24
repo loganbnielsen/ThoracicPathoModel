@@ -1,4 +1,4 @@
-data
+!data
 tmp*
 saved_models*
 figures*
@@ -7,3 +7,4 @@ __pycache__
 .vscode*
 metrics
 models
+.~*
