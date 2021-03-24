@@ -66,6 +66,8 @@ class ThoracicPathoModel(nn.Module):
         #      4) RPN
         #      5) output
         self.num_tiles = ds.num_splits
+        self.num_x_splits = ds.num_x_splits
+        self.num_y_splits = ds.num_y_splits
 
     def _preprocess_linear_projection_configs(self, ds, lp_configs):
         tile_x_dim, tile_y_dim = ds[0].shape[-2:]
@@ -74,6 +76,7 @@ class ThoracicPathoModel(nn.Module):
             lp_configs['input_dim'] = flat_dim
         if not lp_configs.get('output_dim'):
             lp_configs['output_dim'] = flat_dim 
+        self.tile_x_dim, self.tile_y_dim = tile_x_dim, tile_y_dim
         return lp_configs
 
     def _preprocess_embedding_configs(self, ds):
@@ -91,12 +94,28 @@ class ThoracicPathoModel(nn.Module):
             encoder_configs['dmodel'] = num_splits * x_dim * y_dim
         return encoder_configs
 
+    def _combine_tiles(self, X, tile_dim=-3):
+        """
+            Assemble the feature tiles into cohesive feature image
+            
+            Batch x Tiles x Height x Width -> Batch x Height x Width
+        """
+        X = X.reshape(-1, self.num_x_splits, self.num_y_splits, self.tile_x_dim, self.tile_y_dim)
+        X = X.permute(0,1,3,2,4).reshape(-1,self.tile_x_dim*self.num_x_splits,
+                                            self.tile_y_dim*self.num_y_splits)
+        return X
+
+
     
     def forward(self, X):
         X = self.flp(X)
         for i in range(self.num_tiles):
             X[:,i,:] += self.embeddings(i) # Batch x Tiles x Flattened
         X = self.encoder(X)
+        X = self._combine_tiles(X) # "Reinterpret transformer patch outputs as a feature map"
+        # Batch x Tiles x Height x Width -> Batch x Height x Width
+
+    
 
 
 class TransformerEncoderWrapper(nn.Module):

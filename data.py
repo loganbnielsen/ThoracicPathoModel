@@ -70,6 +70,8 @@ class ThoracicDataset(Dataset):
         self.split_list_X = None
         self.split_list_Y = None
         self.num_patches = None
+        self.num_x_splits = None
+        self.num_y_splits = None
         self.shape = None
 
     def _register_X_split(self, list_X):
@@ -81,6 +83,9 @@ class ThoracicDataset(Dataset):
     def register_splits(self, list_X, list_Y):
         self._register_X_split(list_X)
         self._register_Y_split(list_Y)
+
+        self.num_x_splits = len(list_X)-1
+        self.num_y_splits = len(list_Y)-1
 
     @property
     def number_of_patches(self):
@@ -122,7 +127,7 @@ class ThoracicDataset(Dataset):
         y_max = self.summary_df[idx,7]
 
         med_img = MedicalImage(img, class_name, class_id, rad_id, x_min, y_min, x_max, y_max)
-        res = med_img if not pre_split else med_img.exact_split(self.split_list_X, self.split_list_Y)
+        res = [med_img] if not pre_split else med_img.exact_split(self.split_list_X, self.split_list_Y)
 
         return Tensor(res)
 
